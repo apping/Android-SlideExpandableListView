@@ -6,6 +6,8 @@ import android.util.SparseIntArray;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
+import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListAdapter;
 
@@ -54,16 +56,72 @@ public abstract class AbstractSlideExpandableListAdapter extends WrapperListAdap
 	 */
 	private final SparseIntArray viewHeights = new SparseIntArray(10);
 
+    private ISlideExpandableListAdapterListener listener;
+
+    private View.OnClickListener _clickListener;
+
 	public AbstractSlideExpandableListAdapter(ListAdapter wrapped) {
 		super(wrapped);
 	}
 
-	@Override
+    public void setListener(ISlideExpandableListAdapterListener listener) {
+        this.listener = listener;
+    }
+
+    public ISlideExpandableListAdapterListener getListener() {
+        return listener;
+    }
+
+    @Override
 	public View getView(int position, View view, ViewGroup viewGroup) {
+        boolean newView = view == null;
+
 		view = wrapped.getView(position, view, viewGroup);
+
+        if(newView)
+            setupActionListeners(view);
+
 		enableFor(view, position);
+
 		return view;
 	}
+
+    private void setupActionListeners(View view) {
+        View expandable = getExpandableView(view);
+        if(!(expandable instanceof ViewGroup))
+            return;
+
+        ViewGroup expandableViewGroup = (ViewGroup) expandable;
+
+        int childCount = expandableViewGroup.getChildCount();
+        for(int i=0; i<childCount; i++){
+            View child = expandableViewGroup.getChildAt(i);
+            if(child instanceof ImageButton){
+                ImageButton button = (ImageButton) child;
+                button.setOnClickListener(getClickListener());
+            }
+            else if(child instanceof Button){
+                Button button = (Button) child;
+                button.setOnClickListener(getClickListener());
+            }
+        }
+    }
+
+    private View.OnClickListener getClickListener() {
+        if(_clickListener == null){
+            _clickListener = new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    if(listener == null)
+                        return;
+
+                    listener.actionButtonPressed(AbstractSlideExpandableListAdapter.this, lastOpenPosition, view.getId());
+                }
+            };
+        }
+
+        return _clickListener;
+    }
 
 	/**
 	 * This method is used to get the Button view that should
@@ -244,6 +302,11 @@ public abstract class AbstractSlideExpandableListAdapter extends WrapperListAdap
 		target.startAnimation(anim);
 	}
 
+    public void reset() {
+        viewHeights.clear();
+
+        collapseLastOpen(false);
+    }
 
 	/**
 	 * Closes the current open item.
@@ -252,17 +315,21 @@ public abstract class AbstractSlideExpandableListAdapter extends WrapperListAdap
 	 * @return true if an item was closed, false otherwise
 	 */
 	public boolean collapseLastOpen() {
-		if(isAnyItemExpanded()) {
-			// if visible animate it out
-			if(lastOpen != null) {
-				animateView(lastOpen, ExpandCollapseAnimation.COLLAPSE);
-			}
-			openItems.set(lastOpenPosition, false);
-			lastOpenPosition = -1;
-			return true;
-		}
-		return false;
+		return collapseLastOpen(true);
 	}
+
+    public boolean collapseLastOpen(boolean animate) {
+        if(isAnyItemExpanded()) {
+            // if visible animate it out
+            if(lastOpen != null && animate) {
+                animateView(lastOpen, ExpandCollapseAnimation.COLLAPSE);
+            }
+            openItems.set(lastOpenPosition, false);
+            lastOpenPosition = -1;
+            return true;
+        }
+        return false;
+    }
 
 	public Parcelable onSaveInstanceState(Parcelable parcelable) {
 
